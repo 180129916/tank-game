@@ -126,6 +126,79 @@
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-10px); }
         }
+
+        /* 开始界面样式 */
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a252f 0%, #2c3e50 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 300;
+            color: white;
+        }
+        #startScreen h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+            color: #FFD700;
+        }
+        #startScreen p {
+            font-size: 18px;
+            margin: 10px 0;
+            text-align: center;
+            max-width: 600px;
+            padding: 0 20px;
+        }
+        .start-button {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(45deg, #2ecc71, #27ae60);
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 5px 20px rgba(46, 204, 113, 0.5);
+            transition: all 0.3s ease;
+        }
+        .start-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 30px rgba(46, 204, 113, 0.7);
+        }
+        .controls-info {
+            margin-top: 30px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #4ECDC4;
+        }
+        .controls-info h3 {
+            color: #4ECDC4;
+            margin-bottom: 15px;
+        }
+        .controls-info ul {
+            list-style: none;
+            padding: 0;
+            text-align: left;
+        }
+        .controls-info li {
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        .controls-info kbd {
+            background: #34495e;
+            padding: 3px 8px;
+            border-radius: 5px;
+            border: 1px solid #7f8c8d;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -136,9 +209,25 @@
             <div id="healthFill" style="width: 100%"></div>
         </div>
         <div id="gameOver">游戏结束!</div>
-        <div id="instructions">
+        <div id="instructions" style="display: none;">
             使用 WASD 键移动坦克，空格键射击<br>
             躲避敌人子弹，击毁所有敌人获得胜利
+        </div>
+
+        <!-- 开始界面 -->
+        <div id="startScreen">
+            <h1>坦克大战 - 豪华版</h1>
+            <p>勇敢的坦克指挥官，你的任务是消灭所有敌人，保卫基地！</p>
+            <div class="controls-info">
+                <h3>游戏操作</h3>
+                <ul>
+                    <li><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> - 移动坦克</li>
+                    <li><kbd>空格</kbd> - 发射炮弹</li>
+                    <li><kbd>R</kbd> - 游戏结束后重新开始</li>
+                </ul>
+            </div>
+            <p>收集强化道具，躲避敌人攻击，取得最高分数！</p>
+            <button class="start-button" onclick="startGame()">开始游戏</button>
         </div>
     </div>
 
@@ -149,6 +238,7 @@
         // 游戏状态
         let score = 0;
         let gameOver = false;
+        let gameStarted = false;
         let explosions = [];
         let powerUps = [];
 
@@ -156,12 +246,13 @@
         const player = {
             x: canvas.width / 2,
             y: canvas.height - 80,
-            width: 40,
+            width: 50,
             height: 40,
             speed: 4,
             color: '#2ecc71',
             health: 3,
-            maxHealth: 3
+            maxHealth: 3,
+            direction: 0 // 0=上, 1=右, 2=下, 3=左
         };
 
         // 子弹数组
@@ -213,19 +304,32 @@
         const keys = {};
         document.addEventListener('keydown', (e) => {
             keys[e.key] = true;
+
+            // 游戏开始时隐藏教程提示
+            if (!gameStarted && (e.key === ' ' || e.key === 'w' || e.key === 'a' || e.key === 's' || e.key === 'd')) {
+                gameStarted = true;
+                const instructions = document.getElementById('instructions');
+                if (instructions) {
+                    instructions.style.display = 'none';
+                }
+            }
+
             if (e.key === ' ') {
                 e.preventDefault();
                 // 发射子弹（可以连发）
                 if (Date.now() - (player.lastShot || 0) > 200) { // 200ms冷却时间
+                    const bulletX = player.x + player.width / 2 - 3;
+                    const bulletY = player.y + player.height / 2;
                     bullets.push({
-                        x: player.x + player.width / 2 - 3,
-                        y: player.y,
+                        x: bulletX,
+                        y: bulletY,
                         width: 6,
                         height: 15,
                         speed: 7,
                         color: '#f39c12',
                         glowColor: '#FFD700',
-                        isPlayerBullet: true
+                        isPlayerBullet: true,
+                        direction: player.direction
                     });
                     player.lastShot = Date.now();
                 }
@@ -504,73 +608,139 @@
                 ctx.restore();
             });
 
-            // 绘制敌人（添加发光效果）
+            // 绘制敌人（仿真实坦克）
             enemies.forEach(enemy => {
                 ctx.save();
                 ctx.shadowColor = enemy.color;
                 ctx.shadowBlur = 10;
-                ctx.fillStyle = enemy.color;
-                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
 
-                // 敌人内部纹理
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                ctx.fillRect(enemy.x + 5, enemy.y + 5,
-                           enemy.width - 10, enemy.height - 10);
+                // 敌人坦克主体
+                ctx.fillStyle = enemy.color;
+                ctx.fillRect(enemy.x + 5, enemy.y + 10, enemy.width - 10, enemy.height - 15);
+
+                // 敌人坦克履带
+                ctx.fillStyle = '#2c3e50';
+                ctx.fillRect(enemy.x, enemy.y + 15, 8, enemy.height - 15);
+                ctx.fillRect(enemy.x + enemy.width - 8, enemy.y + 15, 8, enemy.height - 15);
+
+                // 敌人坦克炮塔
+                ctx.fillStyle = enemy.color;
+                ctx.beginPath();
+                ctx.arc(enemy.x + enemy.width/2, enemy.y + enemy.height/2, 10, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 敌人坦克炮管
+                ctx.strokeStyle = '#2c3e50';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(enemy.x + enemy.width/2, enemy.y + enemy.height/2 - 10);
+                ctx.lineTo(enemy.x + enemy.width/2, enemy.y - 5);
+                ctx.stroke();
+
+                // 敌人标识
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 10px Arial';
+                ctx.fillText('E',
+                           enemy.x + enemy.width/2 - 3,
+                           enemy.y + enemy.height/2 + 1);
+
+                // 快速敌人更小更灵活
+                if (enemy.speed > 2) {
+                    ctx.fillStyle = 'rgba(255, 165, 0, 0.5)';
+                    ctx.fillRect(enemy.x + enemy.width/2 - 1, enemy.y + enemy.height - 5, 2, 5);
+                }
+
                 ctx.restore();
             });
 
-            // 绘制子弹（添加发光和拖尾效果）
+            // 绘制子弹（仿真实炮弹）
             bullets.forEach(bullet => {
                 ctx.save();
                 ctx.shadowColor = bullet.glowColor || bullet.color;
-                ctx.shadowBlur = bullet.glow || 5;
+                ctx.shadowBlur = 10;
 
-                // 拖尾效果
+                // 炮弹主体（更细长的圆柱形）
+                const gradient = ctx.createLinearGradient(
+                    bullet.x + bullet.width/2, bullet.y,
+                    bullet.x + bullet.width/2, bullet.y + bullet.height
+                );
+                gradient.addColorStop(0, '#e74c3c');
+                gradient.addColorStop(0.3, '#c0392b');
+                gradient.addColorStop(1, '#922b21');
+
+                ctx.fillStyle = gradient;
+                ctx.fillRect(bullet.x + 1, bullet.y, bullet.width - 2, bullet.height);
+
+                // 炮弹头部（锥形）
+                ctx.fillStyle = '#c0392b';
+                ctx.beginPath();
+                ctx.moveTo(bullet.x + bullet.width/2, bullet.y - 3);
+                ctx.lineTo(bullet.x, bullet.y);
+                ctx.lineTo(bullet.x + bullet.width, bullet.y);
+                ctx.closePath();
+                ctx.fill();
+
+                // 炮弹尾焰效果
                 if (bullet.isPlayerBullet) {
-                    const gradient = ctx.createLinearGradient(
+                    const trailGradient = ctx.createLinearGradient(
                         bullet.x + bullet.width/2, bullet.y + bullet.height,
-                        bullet.x + bullet.width/2, bullet.y
+                        bullet.x + bullet.width/2, bullet.y + bullet.height + 20
                     );
-                    gradient.addColorStop(0, 'rgba(243, 156, 18, 0)');
-                    gradient.addColorStop(1, 'rgba(243, 156, 18, 0.8)');
-                    ctx.fillStyle = gradient;
-                    ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height + 10);
+                    trailGradient.addColorStop(0, 'rgba(243, 156, 18, 0.8)');
+                    trailGradient.addColorStop(1, 'rgba(243, 156, 18, 0)');
+                    ctx.fillStyle = trailGradient;
+                    ctx.fillRect(bullet.x + 1, bullet.y + bullet.height, bullet.width - 2, 20);
                 }
 
-                // 子弹主体
-                ctx.fillStyle = bullet.color;
-                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
-
-                // 子弹光点
-                ctx.fillStyle = 'white';
-                ctx.fillRect(bullet.x + bullet.width/2 - 1,
-                           bullet.y + bullet.height/2 - 1, 2, 2);
                 ctx.restore();
             });
 
-            // 绘制玩家坦克（豪华版本）
+            // 绘制玩家坦克（仿真实坦克）
             ctx.save();
             ctx.shadowColor = player.color;
             ctx.shadowBlur = 15;
-            ctx.fillStyle = player.color;
-            ctx.fillRect(player.x, player.y, player.width, player.height);
 
-            // 坦克内部装饰
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-            ctx.fillRect(player.x + 5, player.y + 5,
-                       player.width - 10, player.height - 10);
+            // 坦克主体（更真实的矩形底盘）
+            ctx.fillStyle = '#27ae60';
+            ctx.fillRect(player.x + 5, player.y + 10, player.width - 10, player.height - 15);
 
-            // 坦克炮管
+            // 坦克履带
             ctx.fillStyle = '#2c3e50';
-            ctx.fillRect(player.x + player.width/2 - 3,
-                       player.y - 10, 6, 10);
+            ctx.fillRect(player.x, player.y + 15, 8, player.height - 15);
+            ctx.fillRect(player.x + player.width - 8, player.y + 15, 8, player.height - 15);
+
+            // 坦克炮塔（圆形）
+            ctx.fillStyle = '#2ecc71';
+            ctx.beginPath();
+            ctx.arc(player.x + player.width/2, player.y + player.height/2, 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 坦克炮管（更长的炮管）
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(player.x + player.width/2, player.y + player.height/2 - 12);
+            ctx.lineTo(player.x + player.width/2, player.y - 5);
+            ctx.stroke();
+
+            // 炮管细节
+            ctx.strokeStyle = '#34495e';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(player.x + player.width/2 - 1, player.y - 5);
+            ctx.lineTo(player.x + player.width/2 + 1, player.y - 5);
+            ctx.stroke();
+
+            // 坦克观察窗
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.fillRect(player.x + player.width/2 - 8, player.y + player.height/2 - 3, 16, 6);
 
             // 坦克标识
             ctx.fillStyle = 'white';
-            ctx.font = 'bold 16px Arial';
+            ctx.font = 'bold 12px Arial';
             ctx.fillText('T',
-                       player.x + player.width/2 - 5,
-                       player.y + player.height/2 + 5);
+                       player.x + player.width/2 - 4,
+                       player.y + player.height/2 + 1);
             ctx.restore();
 
             // 绘制玩家生命值（心形图标）
@@ -595,7 +765,6 @@
             const healthPercent = (player.health / player.maxHealth) * 100;
             healthFill.style.width = healthPercent + '%';
         }
-        }
 
         // 游戏循环
         function gameLoop() {
@@ -613,9 +782,17 @@
             requestAnimationFrame(gameLoop);
         }
 
-        // 启动游戏
-        spawnEnemies();
-        gameLoop();
+        // 启动游戏（不再自动启动）
+        // spawnEnemies();
+        // gameLoop();
+
+        // 开始游戏
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('instructions').style.display = 'block';
+            spawnEnemies();
+            gameLoop();
+        }
 
         // 重置游戏
         document.addEventListener('keydown', (e) => {
